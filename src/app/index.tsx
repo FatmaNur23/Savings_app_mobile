@@ -10,13 +10,17 @@ export default function IndexScreen() {
     const [calculation, setCalculation] = useState<any>(null);
     const [transactions, setTransactions] = useState<any[]>([]);
 
+
+    const [incomesList, setIncomesList] = useState<any[]>([]);
+    const [expensesList, setExpensesList] = useState<any[]>([]);
+    const [completedGoals, setCompletedGoals] = useState<any[]>([]);
+
     const [modalVisible, setModalVisible] = useState<boolean>(false);
     const [transactionType, setTransactionType] = useState<string>('INCOME');
 
     const [amount, setAmount] = useState<string>('');
     const [description, setDescription] = useState<string>('');
     const [goalNameInput, setGoalNameInput] = useState<string>('');
-
 
     const router = useRouter();
 
@@ -29,6 +33,8 @@ export default function IndexScreen() {
                 return;
             }
 
+            setIncomesList(incomesRes.data || []);
+
             const goalsResponse = await getGoals();
             if (goalsResponse.data && goalsResponse.data.length > 0) {
                 const activeGoal = goalsResponse.data[goalsResponse.data.length - 1];
@@ -36,12 +42,17 @@ export default function IndexScreen() {
 
                 const calcResponse = await getGoalCalculation(activeGoal.id);
                 setCalculation(calcResponse.data);
+
+                const finished = goalsResponse.data.filter((g: any) => g.isCompleted);
+                setCompletedGoals(finished);
             } else {
                 setGoal(null);
                 setCalculation(null);
+                setCompletedGoals([]);
             }
 
             const expensesRes = await getExpenses();
+            setExpensesList(expensesRes.data || []);
 
             const formattedIncomes = (incomesRes.data || []).map((item: any) => ({ ...item, type: 'INCOME' }));
 
@@ -61,7 +72,6 @@ export default function IndexScreen() {
         }
     };
 
-
     useEffect(() => {
         fetchData();
     }, []);
@@ -77,25 +87,22 @@ export default function IndexScreen() {
 
             if (transactionType === 'GOAL') {
                 if (!amount || !goalNameInput) return Alert.alert('Uyarı', 'Lütfen hedef adı ve tutarını girin.');
-                await createGoal({ name: goalNameInput, targetAmount: parseFloat(amount), currentAmount: 0, monthlySavings: 0 });
+                await createGoal({ name: goalNameInput, targetAmount: parseFloat(amount), currentAmount: 0, monthlySavings: 0, isCompleted: false });
             }
             else if (transactionType === 'INCOME') {
                 if (!amount || !description) return Alert.alert('Uyarı', 'Boş alan bırakmayın.');
-                // Gelirler her ay otomatik tekrar etmesi için isRecurring: true gönderiliyor
                 await createIncome({ title: description, amount: parseFloat(amount), date: today, isRecurring: true });
             }
             else if (transactionType === 'SAVINGS') {
                 if (!amount) return Alert.alert('Uyarı', 'Lütfen birikim tutarını girin.');
-                // Sabit birikim de her ay otomatik yinelenecek bir gider/birikim olarak kaydediliyor
                 await createExpense({ title: description || 'Sabit Birikim', amount: parseFloat(amount), date: today, category: 'Sabit Birikim', isRecurring: true });
             }
             else {
                 if (!amount || !description) return Alert.alert('Uyarı', 'Boş alan bırakmayın.');
-                // Standart giderler (istersek bunları tek seferlik false yapabiliriz ama şimdilik standart kaydediyoruz)
                 await createExpense({ title: description, amount: parseFloat(amount), date: today, category: 'Genel', isRecurring: false });
             }
 
-            Alert.alert('Başarılı', 'İşlem başarıyla kaydedildi ve her ay için otomatikleştirildi!');
+            Alert.alert('Başarılı', 'İşlem başarıyla kaydedildi!');
 
             setModalVisible(false);
             setAmount('');
@@ -111,6 +118,9 @@ export default function IndexScreen() {
         }
     };
 
+    const totalIncome = incomesList.reduce((sum, item) => sum + item.amount, 0);
+    const totalExpense = expensesList.reduce((sum, item) => sum + item.amount, 0);
+    const netBalance = totalIncome - totalExpense;
 
     if (loading) {
         return (
@@ -124,8 +134,28 @@ export default function IndexScreen() {
     return (
         <SafeAreaView style={styles.container}>
             <ScrollView contentContainerStyle={styles.scrollContent} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}>
-                <Text style={styles.headerTitle}>Birikim Takibi</Text>
+                <Text style={styles.headerTitle}>Birikim Takibi & Analiz</Text>
 
+                {/* 1. Finansal Özet Kartları (Gelir / Gider / Net) */}
+                <View style={styles.cardRow}>
+                    <View style={[styles.summaryCard, { backgroundColor: '#27AE60' }]}>
+                        <Text style={styles.cardLabel}>Toplam Gelir</Text>
+                        <Text style={styles.cardValue}>+{totalIncome} TL</Text>
+                    </View>
+                    <View style={[styles.summaryCard, { backgroundColor: '#C0392B' }]}>
+                        <Text style={styles.cardLabel}>Toplam Gider</Text>
+                        <Text style={styles.cardValue}>-{totalExpense} TL</Text>
+                    </View>
+                </View>
+
+                <View style={styles.netCard}>
+                    <Text style={styles.cardLabel}>Net Bakiye Durumu</Text>
+                    <Text style={[styles.netValue, { color: netBalance >= 0 ? '#27AE60' : '#C0392B' }]}>
+                        {netBalance} TL
+                    </Text>
+                </View>
+
+                {/* Mevcut Hedef Kartı */}
                 {goal && calculation ? (
                     <View style={styles.card}>
                         <Text style={styles.cardSubtitle}>Mevcut Hedef</Text>
@@ -158,6 +188,20 @@ export default function IndexScreen() {
                     </View>
                 )}
 
+                {/* 2. Tamamlanan Hedefler Geçmişi */}
+                <Text style={styles.sectionTitle}>🎯 Tamamlanan Hedefler Geçmişi</Text>
+                {completedGoals.length > 0 ? (
+                    completedGoals.map((g, index) => (
+                        <View key={index} style={styles.goalHistoryCard}>
+                            <Text style={styles.goalHistoryTitle}>🏆 {g.name}</Text>
+                            <Text style={styles.goalHistoryDetail}>Tutar: {g.targetAmount} TL - Başarıyla Tamamlandı</Text>
+                        </View>
+                    ))
+                ) : (
+                    <Text style={styles.emptyText}>Henüz tamamlanmış bir hedef bulunmuyor.</Text>
+                )}
+
+                {/* Son İşlemler */}
                 <Text style={styles.sectionTitle}>Son İşlemler</Text>
                 {transactions.length > 0 ? (
                     transactions.map((item, index) => (
@@ -166,7 +210,6 @@ export default function IndexScreen() {
                                 <Text style={styles.transactionTitle}>{item.title}</Text>
                                 <Text style={styles.transactionDate}>{item.date}</Text>
                             </View>
-                            {/* Rengi tipe göre ayarlıyoruz: Gelir Yeşil, Gider Kırmızı, Sabit Birikim Mavi */}
                             <Text style={[styles.transactionAmount, item.type === 'INCOME' ? styles.incomeText : (item.type === 'SAVINGS' ? styles.savingsText : styles.expenseText)]}>
                                 {item.type === 'INCOME' ? '+' : '-'}{item.amount} TL
                             </Text>
@@ -238,6 +281,12 @@ const styles = StyleSheet.create({
     scrollContent: { padding: 20, paddingBottom: 100 },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { fontSize: 28, fontWeight: 'bold', color: '#2C3E50', marginBottom: 20 },
+    cardRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
+    summaryCard: { flex: 1, padding: 15, borderRadius: 12, marginRight: 8, alignItems: 'center' },
+    netCard: { backgroundColor: '#FFF', padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 5, elevation: 2 },
+    cardLabel: { color: '#FFF', fontSize: 11, fontWeight: '600', marginBottom: 4 },
+    cardValue: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+    netValue: { fontSize: 22, fontWeight: 'bold', marginTop: 2 },
     card: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 3 },
     cardSubtitle: { fontSize: 12, color: '#95A5A6', textTransform: 'uppercase', fontWeight: '600', marginBottom: 4 },
     goalName: { fontSize: 22, fontWeight: 'bold', color: '#34495E', marginBottom: 15 },
@@ -258,7 +307,10 @@ const styles = StyleSheet.create({
     incomeText: { color: '#2ECC71' },
     expenseText: { color: '#E74C3C' },
     savingsText: { color: '#3498DB' },
-    emptyText: { textAlign: 'center', color: '#7F8C8D', marginTop: 20, fontStyle: 'italic' },
+    goalHistoryCard: { backgroundColor: '#E8F8F5', padding: 15, borderRadius: 12, borderWidth: 1, borderColor: '#A3E4D7', marginBottom: 12 },
+    goalHistoryTitle: { fontSize: 16, fontWeight: 'bold', color: '#117A65', marginBottom: 4 },
+    goalHistoryDetail: { fontSize: 13, color: '#566573' },
+    emptyText: { textAlign: 'center', color: '#7F8C8D', marginTop: 10, marginBottom: 15, fontStyle: 'italic' },
     fab: { position: 'absolute', bottom: 30, right: 30, backgroundColor: '#3498DB', width: 60, height: 60, borderRadius: 30, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 5, elevation: 5 },
     fabText: { fontSize: 30, color: '#FFF', fontWeight: 'bold', marginTop: -2 },
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },

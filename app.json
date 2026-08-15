@@ -17,7 +17,8 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.fatma2328.ParaBiriktirmeMobil"
     },
     "web": {
       "output": "static",
@@ -37,6 +38,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f71f6e2b-cc55-45e4-a050-ad7575b71144"
+      }
     }
   }
 }
