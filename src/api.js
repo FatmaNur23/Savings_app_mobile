@@ -1,6 +1,16 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 
-const BASE_URL = 'http://localhost:8080/api/v1';
+const getBaseUrl = () => {
+    const debuggerHost = Constants.expoConfig?.hostUri;
+    if (debuggerHost) {
+        const ip = debuggerHost.split(':')[0];
+        return `http://${ip}:8080/api/v1`;
+    }
+    return 'http://localhost:8080/api/v1';
+};
+
+const BASE_URL = getBaseUrl();
 
 export const getGoals = () => axios.get(`${BASE_URL}/goals`);
 export const createGoal = (goalData) => axios.post(`${BASE_URL}/goals`, goalData);
